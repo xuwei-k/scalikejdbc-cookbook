@@ -12,14 +12,17 @@ sbt プロジェクトが準備できたので、早速 ScalikeJDBC で SQL を�
 
 まずは JDBC ドライバーのロードとコネクションプールの初期化です。
 
+```tut
     import scalikejdbc._
     Class.forName("org.h2.Driver")
     ConnectionPool.singleton("jdbc:h2:mem:scalikejdbc","user","pass")
+```
 
 ### DDL の実行
 
 まだ何もテーブルがないので以下を実行して members テーブルを作ります。例外が発生しなければテーブル作成に成功しています。
 
+```tut
     DB autoCommit { implicit session =>
       SQL("""
         create table members (
@@ -31,6 +34,7 @@ sbt プロジェクトが準備できたので、早速 ScalikeJDBC で SQL を�
         )
       """).execute.apply()
     }
+```
 
 ### implicit session の意味
 
@@ -38,19 +42,25 @@ sbt プロジェクトが準備できたので、早速 ScalikeJDBC で SQL を�
 
 まず DB.autoCommit［A］(...) は「(DBSession) => A」という型の関数を引数にとるメソッドです。通常はこのようにして呼び出します。
 
+```tut
     DB autoCommit { session =>
     }
+```
 
 さらにこの session に implicit をつけると、このブロックの中で implicit val 宣言された暗黙のパラメータ（implicit parameter）と同様の意味になります。つまり、
 
+```tut
     DB autoCommit { implicit session =>
     }
+```
 
 は、以下と同義です。
 
+```tut
     DB autoCommit { session =>
      implicit val _session: DBSession = session
     }
+```
 
 では、なぜ session が暗黙のパラメータである必要があるかというと DB ブロックの中にあった SQL("...").execute.apply() の apply メソッドが暗黙のパラメータとして DBSession 型を期待するためです。
 
@@ -84,16 +94,20 @@ Scala の暗黙のパラメータは、カリー化されたメソッドの最�
 
 先ほどの create table で例外が発生していなければ、正常にテーブルが作成されているはずです。members テーブルに対して select 文を発行してみましょう。
 
+```tut
     val members: List[Map[String, Any]] = DB readOnly { implicit session =>
       SQL("select * from members").map(rs => rs.toMap).list.apply()
     }
     // => members: List[Map[String,Any]] = List()
+```
 
 まだデータがないので空の List が返ってきました。
 
 では、適当に 2 件ほどデータを insert してみましょう。なお、SQL から始まる部分は apply() を呼び出すまでは実際に SQL を発行することはありませんので、以下のように値として何度でも再利用することができます。
 
+```tut
     import org.joda.time._
+
     DB localTx { implicit session =>
       val insertSql = SQL("insert into members (name, birthday, created_at) values (?, ?, ?)")
       val createdAt = DateTime.now
@@ -101,6 +115,7 @@ Scala の暗黙のパラメータは、カリー化されたメソッドの最�
       insertSql.bind("Alice", Option(new LocalDate("1980-01-01")), createdAt).update.apply()
       insertSql.bind("Bob", None, createdAt).update.apply()
     }
+```
 
 
 　ちなみに ScalikeJDBC では上記のような JDBC の通常のテンプレートだけでなく、バインド変数を {name} の形式で埋め込む名前付き SQL テンプレートと、
@@ -125,10 +140,12 @@ Scala の暗黙のパラメータは、カリー化されたメソッドの最�
 
 さて、再びサンプルに戻り、もう一度、同じ select 文を発行してみましょう。
 
+```tut
     val members: List[Map[String, Any]] = DB readOnly { implicit session =>
       SQL("select * from members").map(_.toMap).list.apply()
     }
     // => members: List[Map[String,Any]] = List(Map(ID -> 1, NAME -> Alice, BIRTHDAY -> 1980-01-01, CREATED_AT -> 2012-12-31 00:02:09.247), Map(ID -> 2, NAME -> Bob, CREATED_AT -> 2012-12-31 00:02:09.247))
+```
 
 想定通り insert した 2 件が返ってきました。先の insert 処理がうまくいったことがわかります。
 
@@ -157,6 +174,7 @@ ScalikeJDBC では ResultSet からマッピングするクラスに特殊な設
       SQL("select * from members limit 10").map(allColumns).list.apply()
     }
     // => members: List[Member] = List(Member(1,Alice,None,Some(1980-01-01),2012-12-31T00:02:09.247+09:00), Member(2,Bob,None,None,2012-12-31T00:02:09.247+09:00))
+
 
 ### SQL インターポレーション
 
@@ -212,6 +230,7 @@ SQL("...") は使い方を誤ると SQL インジェクション脆弱性を引�
     import scalikejdbc._
     
     case class Member(id: Long, name: String, birthday: Option[LocalTime] = None)
+
     object Member extends SQLSyntaxSupport[Member] {
       override tableName = "members"
       override columnNames = Seq("id", "name", "birthday")
@@ -239,6 +258,7 @@ SQL("...") は使い方を誤ると SQL インジェクション脆弱性を引�
           }.single.apply()
       }
     }
+
 
 パッと見では、記述量が増えているように見えますが、SQL の実行部分の中で文字列を指定する箇所がほとんどなくなりました。
 
